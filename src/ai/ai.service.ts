@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export interface PlantAnalysis {
   name: string;
@@ -12,29 +12,17 @@ export interface PlantAnalysis {
 
 @Injectable()
 export class AiService {
-  private client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+  private genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
   async identifyPlant(base64Image: string, mediaType = 'image/jpeg'): Promise<PlantAnalysis> {
-    const response = await this.client.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/webp',
-                data: base64Image,
-              },
-            },
-            {
-              type: 'text',
-              text: `Eres un experto botánico. Identifica esta planta y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin bloques de código, solo el JSON:
+    console.log('GEMINI KEY:', process.env.GEMINI_API_KEY?.slice(0, 10));
+    const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    const result = await model.generateContent([
+      {
+        inlineData: { data: base64Image, mimeType: mediaType }
+      },
+      `Eres un experto botánico. Identifica esta planta y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin bloques de código, solo el JSON:
 {
   "name": "nombre común en español",
   "species": "nombre científico",
@@ -42,20 +30,12 @@ export class AiService {
   "waterEveryDays": número de días entre riegos,
   "careNotes": "descripción detallada de cuidados en español",
   "toxic": true o false para mascotas
-}`,
-            },
-          ],
-        },
-      ],
-    });
+}`
+    ]);
 
     try {
-      const text = response.content
-        .filter((b) => b.type === 'text')
-        .map((b) => (b as { type: 'text'; text: string }).text)
-        .join('');
-
-      const clean = text.replace(/```json|```/g, '').trim();
+      const text = result.response.text();
+      const clean = text.replace(/\`\`\`json|\`\`\`/g, '').trim();
       return JSON.parse(clean) as PlantAnalysis;
     } catch {
       throw new BadRequestException('No se pudo identificar la planta. Intenta con otra foto.');
