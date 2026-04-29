@@ -2,7 +2,7 @@
   "name": "plantapp-backend",
   "version": "0.1.0",
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "prisma generate && rm -rf dist && nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main"
